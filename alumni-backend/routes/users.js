@@ -7,6 +7,8 @@ import path from "path";
 import auth from "../middleware/auth.js";
 import adminAuth from "../middleware/adminAuth.js";
 import fs from "fs";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 
 const router = express.Router();
 
@@ -316,6 +318,8 @@ router.get("/document/:filename", adminAuth, async (req, res) => {
   try {
     const filename = decodeURIComponent(req.params.filename);
     const sanitizedFilename = path.basename(filename);
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
     const filePath = path.join(__dirname, "..", "uploads", sanitizedFilename);
 
     console.log({
@@ -323,7 +327,7 @@ router.get("/document/:filename", adminAuth, async (req, res) => {
       sanitizedFilename,
       filePath,
       exists: fs.existsSync(filePath),
-      __dirname,
+      currentDir: __dirname,
       fullPath: path.resolve(filePath),
     });
 
@@ -335,14 +339,9 @@ router.get("/document/:filename", adminAuth, async (req, res) => {
       });
     }
 
-    try {
-      const stats = fs.statSync(filePath);
-      if (!stats.isFile()) {
-        return res.status(400).json({ message: "Invalid document path" });
-      }
-    } catch (statError) {
-      console.error("Error checking file stats:", statError);
-      return res.status(500).json({ message: "Error accessing file" });
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      return res.status(400).json({ message: "Invalid document path" });
     }
 
     res.setHeader("Content-Length", stats.size);
