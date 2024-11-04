@@ -1,0 +1,40 @@
+# Environment variables
+.env
+.env.*
+
+# Dependencies
+/node_modules
+/vendor
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# IDE/Editor folders
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Build output
+/dist
+/build
+/out
+
+# Cache directories
+.npm
+.eslintcache
+
+# Test coverage
+/coverage
+
+# Temporary files
+/tmp
+/temp
