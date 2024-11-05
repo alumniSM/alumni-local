@@ -61,71 +61,15 @@ const ManageUser = () => {
   const handleDownload = async (documentUrl) => {
     try {
       if (!documentUrl) {
-        toast.error("No document available");
+        toast.error("No image available");
         return;
       }
 
-      const token = localStorage.getItem("token");
-      if (!token) {
-        toast.error("Authentication required");
-        return;
-      }
-
-      // For Cloudinary URLs
-      if (documentUrl.includes("cloudinary.com")) {
-        try {
-          // Get signed URL from backend
-          const response = await api.get(
-            `/users/document/${encodeURIComponent(documentUrl)}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-
-          if (!response.data || !response.data.secure_url) {
-            throw new Error("Failed to get download URL");
-          }
-
-          // Use the signed URL for download
-          window.open(response.data.secure_url, "_blank");
-        } catch (error) {
-          console.error("Download error:", error);
-          toast.error(`Failed to download document: ${error.message}`);
-        }
-        return;
-      }
-
-      // For non-Cloudinary URLs
-      const response = await api.get(
-        `/users/document/${encodeURIComponent(documentUrl)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          responseType: "blob",
-        }
-      );
-
-      if (response.data) {
-        const blob = new Blob([response.data]);
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-
-        // Get filename from URL
-        const fileName = documentUrl.split("/").pop().split("?")[0];
-        link.setAttribute("download", fileName);
-
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }
+      // Open image in new tab
+      window.open(documentUrl, "_blank");
     } catch (error) {
-      console.error("Download error:", error);
-      toast.error("Failed to download document");
+      console.error("Error viewing image:", error);
+      toast.error("Failed to open image");
     }
   };
   // UI Components
