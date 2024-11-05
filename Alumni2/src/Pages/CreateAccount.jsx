@@ -49,28 +49,17 @@ const CreateAccount = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Check file type and size
-    const allowedTypes = [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ];
-    const allowedExtensions = [".pdf", ".doc", ".docx"];
-    const fileExtension = file.name
-      .toLowerCase()
-      .slice(file.name.lastIndexOf("."));
-
-    if (
-      !allowedTypes.includes(file.type) ||
-      !allowedExtensions.includes(fileExtension)
-    ) {
-      toast.error("Only PDF and DOC/DOCX files are allowed");
+    // Check file type
+    const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Only JPG, JPEG and PNG files are allowed");
       e.target.value = "";
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size must be less than 5MB");
+    // Check file size (2MB limit)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("File size must be less than 2MB");
       e.target.value = "";
       return;
     }
@@ -284,7 +273,7 @@ const CreateAccount = () => {
           </div>
           <div>
             <label className="block mb-2 text-sm font-medium text-gray-700">
-              Temporary Document for Admin Verification{" "}
+              Tempo Image for Verification
               <span className="text-red-600">*</span>
             </label>
             <div className="relative">
@@ -293,7 +282,7 @@ const CreateAccount = () => {
                 type="file"
                 onChange={handleFileChange}
                 className="w-full pl-10 px-4 py-2 border rounded-md text-gray-700"
-                accept=".pdf,.doc,.docx"
+                accept="image/jpeg,image/png,image/jpg"
                 required
               />
             </div>
