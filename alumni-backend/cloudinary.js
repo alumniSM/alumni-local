@@ -45,15 +45,12 @@ const profileStorage = new CloudinaryStorage({
 const documentStorage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: "alumni/documents", // This is already setting the folder path
-    resource_type: "raw",
-    format: "auto",
-    allowed_formats: ["pdf", "doc", "docx"],
+    folder: "alumni/documents",
+    allowed_formats: ["jpg", "jpeg", "png"],
+    transformation: [{ width: 1024, height: 1024, crop: "limit" }],
     public_id: (req, file) => {
       const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      const fileExtension = file.originalname.split(".").pop().toLowerCase();
-      // Remove any additional path segments, just use the filename
-      return uniqueSuffix + "." + fileExtension;
+      return `temp_img_${uniqueSuffix}`;
     },
   },
 });
