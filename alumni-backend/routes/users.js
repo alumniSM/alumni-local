@@ -9,6 +9,9 @@ import adminAuth from "../middleware/adminAuth.js";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import { v2 as cloudinary } from "cloudinary";
+
+import { uploadProfile, uploadDocument } from "../cloudinary.js";
 
 const router = express.Router();
 
@@ -46,88 +49,127 @@ const validatePassword = (password) => {
   return null;
 };
 
-// Register
-router.post("/register", upload.single("tempDocument"), async (req, res) => {
-  try {
-    const {
-      first_name,
-      middle_name,
-      last_name,
-      gender,
-      email,
-      password,
-      department,
-      batch,
-      phone_number,
-      linkedin_profile,
-    } = req.body;
+router.post(
+  "/register",
+  uploadDocument.single("tempDocument"),
+  async (req, res) => {
+    try {
+      const {
+        first_name,
+        middle_name,
+        last_name,
+        gender,
+        email,
+        password,
+        department,
+        batch,
+        phone_number,
+        linkedin_profile,
+      } = req.body;
 
-    // Validate required fields
-    if (!first_name || !last_name || !email || !password) {
-      return res.status(400).json({
-        message: "Please provide all required fields",
+      // Validate required fields
+      if (
+        !first_name ||
+        !last_name ||
+        !email ||
+        !password ||
+        !department ||
+        !batch
+      ) {
+        return res.status(400).json({
+          message: "Please provide all required fields",
+        });
+      }
+
+      // Validate document upload
+      if (!req.file) {
+        return res.status(400).json({
+          message: "Please upload a temporary document",
+        });
+      }
+
+      // Normalize email to lowercase
+      const normalizedEmail = email.toLowerCase();
+
+      // Check for existing user with case-insensitive email
+      let user = await User.findOne({
+        email: { $regex: new RegExp(`^${normalizedEmail}$`, "i") },
+      });
+
+      if (user) {
+        // Delete uploaded file if user already exists
+        if (req.file && req.file.path) {
+          await cloudinary.uploader.destroy(req.file.public_id);
+        }
+        return res.status(400).json({
+          message: "An account with this email already exists",
+        });
+      }
+
+      // Validate password
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        // Delete uploaded file if password validation fails
+        if (req.file && req.file.path) {
+          await cloudinary.uploader.destroy(req.file.public_id);
+        }
+        return res.status(400).json({ message: passwordError });
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+
+      // Create new user with Cloudinary URL
+      user = new User({
+        first_name,
+        middle_name,
+        last_name,
+        gender,
+        email: normalizedEmail,
+        password: hashedPassword,
+        department,
+        batch,
+        phone_number,
+        linkedin_profile,
+        tempDocument: req.file.path, // Cloudinary URL
+        isVerified: false,
+        isAdmin: false,
+      });
+
+      await user.save();
+
+      res.status(201).json({
+        message: "Registration successful. Please wait for admin approval.",
+        userId: user._id,
+      });
+    } catch (error) {
+      console.error("Registration error details:", error);
+
+      // Delete uploaded file if user creation fails
+      if (req.file && req.file.path) {
+        await cloudinary.uploader.destroy(req.file.public_id);
+      }
+
+      if (error.name === "ValidationError") {
+        return res.status(400).json({
+          message: "Invalid input data",
+          errors: Object.values(error.errors).map((err) => err.message),
+        });
+      }
+
+      if (error.code === 11000) {
+        return res.status(400).json({
+          message: "An account with this email already exists",
+        });
+      }
+
+      res.status(500).json({
+        message: "Registration failed. Please try again.",
+        error: error.message,
       });
     }
-
-    // Normalize email to lowercase
-    const normalizedEmail = email.toLowerCase();
-
-    // Check for existing user with case-insensitive email
-    let user = await User.findOne({
-      email: { $regex: new RegExp(`^${normalizedEmail}$`, "i") },
-    });
-
-    if (user) {
-      return res.status(400).json({
-        message: "An account with this email already exists",
-      });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({
-        message: "Please upload a temporary document",
-      });
-    }
-
-    const passwordError = validatePassword(password);
-    if (passwordError) {
-      return res.status(400).json({ message: passwordError });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    user = new User({
-      first_name,
-      middle_name,
-      last_name,
-      gender,
-      email: normalizedEmail, // Store normalized email
-      password: hashedPassword,
-      department,
-      batch,
-      phone_number,
-      linkedin_profile,
-      tempDocument: req.file.filename, // Store just the filename
-    });
-
-    await user.save();
-
-    res.status(201).json({
-      message: "Registration successful. Please wait for admin approval.",
-      userId: user._id,
-    });
-  } catch (error) {
-    console.error("Registration error:", error);
-    if (error.name === "ValidationError") {
-      return res.status(400).json({
-        message: "Invalid input data",
-        errors: Object.values(error.errors).map((err) => err.message),
-      });
-    }
-    res.status(500).json({ message: "Server error during registration" });
   }
-});
+);
 
 // Login
 router.post("/login", async (req, res) => {
@@ -244,13 +286,11 @@ router.get("/profile", auth, async (req, res) => {
 router.patch(
   "/profile",
   auth,
-  upload.single("profile_image"),
+  uploadProfile.single("profile_image"),
   async (req, res) => {
     try {
-      console.log("Received profile update request:", req.body);
       const user = await User.findById(req.user.id);
       if (!user) {
-        console.log("User not found:", req.user.id);
         return res.status(404).json({ message: "User not found" });
       }
 
@@ -267,14 +307,13 @@ router.patch(
       });
 
       if (req.file) {
-        user.profile_image = `/uploads/${req.file.filename}`;
+        user.profile_image = req.file.path;
       }
 
       await user.save();
-      console.log("User profile updated successfully:", user);
       res.json(user);
     } catch (error) {
-      console.error("Error updating user profile:", error);
+      console.error("Error updating profile:", error);
       res.status(500).json({ message: "Server error", error: error.message });
     }
   }
@@ -316,59 +355,25 @@ router.delete("/:userId", adminAuth, async (req, res) => {
 // Add document download route
 router.get("/document/:filename", adminAuth, async (req, res) => {
   try {
-    const filename = decodeURIComponent(req.params.filename);
-    const sanitizedFilename = path.basename(filename);
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    const filePath = path.join(__dirname, "..", "uploads", sanitizedFilename);
-
-    console.log({
-      requestedFilename: filename,
-      sanitizedFilename,
-      filePath,
-      exists: fs.existsSync(filePath),
-      currentDir: __dirname,
-      fullPath: path.resolve(filePath),
+    const user = await User.findOne({
+      tempDocument: { $regex: new RegExp(req.params.filename, "i") },
     });
 
-    if (!fs.existsSync(filePath)) {
-      console.log("File not found:", filePath);
-      return res.status(404).json({
-        message: "Document not found",
-        path: filePath,
-      });
+    if (!user || !user.tempDocument) {
+      return res.status(404).json({ message: "Document not found" });
     }
 
-    const stats = fs.statSync(filePath);
-    if (!stats.isFile()) {
-      return res.status(400).json({ message: "Invalid document path" });
-    }
-
-    res.setHeader("Content-Length", stats.size);
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${sanitizedFilename}"`
-    );
-
-    const fileStream = fs.createReadStream(filePath);
-
-    fileStream.on("error", (error) => {
-      console.error("Stream error:", error);
-      if (!res.headersSent) {
-        res.status(500).json({ message: "Error streaming file" });
-      }
+    // Get the Cloudinary resource
+    const result = await cloudinary.api.resource(user.tempDocument, {
+      resource_type: "raw",
+      type: "upload",
     });
 
-    fileStream.pipe(res);
+    // Return the secure URL
+    res.json({ secure_url: result.secure_url });
   } catch (error) {
-    console.error("Document download error:", error);
-    if (!res.headersSent) {
-      res.status(500).json({
-        message: "Error downloading document",
-        error: error.message,
-      });
-    }
+    console.error("Error fetching document:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 

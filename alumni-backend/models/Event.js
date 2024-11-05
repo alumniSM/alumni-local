@@ -6,9 +6,21 @@ const EventSchema = new mongoose.Schema(
     description: { type: String, required: true },
     dateTime: { type: Date, required: true },
     location: { type: String, required: true },
-    image: { type: String },
+    image: {
+      type: String,
+      get: function (url) {
+        return url || null;
+      },
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { getters: true },
+  }
 );
 
 export default mongoose.model("Event", EventSchema);

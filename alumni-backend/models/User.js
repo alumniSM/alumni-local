@@ -22,7 +22,9 @@ const userSchema = new mongoose.Schema({
   },
   department: {
     type: String,
-    required: true,
+    required: function () {
+      return !this.isAdmin;
+    },
     enum: [
       "Information Technology",
       "Information System",
@@ -31,7 +33,12 @@ const userSchema = new mongoose.Schema({
     ],
   },
   batch: String,
-  profile_image: String,
+  profile_image: {
+    type: String,
+    get: function (url) {
+      return url || null;
+    },
+  },
   linkedin_profile: String,
   isAdmin: {
     type: Boolean,
@@ -45,6 +52,12 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: function () {
       return !this.isAdmin;
+    },
+    get: function (url) {
+      if (!url) return null;
+      return url.startsWith("http")
+        ? url
+        : `${process.env.CLOUDINARY_URL}/${url}`;
     },
   },
   createdAt: {

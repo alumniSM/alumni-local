@@ -6,36 +6,21 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import { uploadSurvey } from "../cloudinary.js";
 
 const router = express.Router();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadPath = path.join(__dirname, "..", "uploads");
-    fs.mkdirSync(uploadPath, { recursive: true });
-    cb(null, uploadPath);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
-});
-
-const upload = multer({ storage: storage });
-
-// Create a survey
-router.post("/", auth, upload.single("image"), async (req, res) => {
+router.post("/", auth, uploadSurvey.single("image"), async (req, res) => {
   try {
     const { survey_title, description, survey_link } = req.body;
     const survey = new Survey({
       survey_title,
       description,
       survey_link,
-      image: req.file
-        ? `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`
-        : null,
+      image: req.file ? req.file.path : null,
       createdBy: req.user.id,
     });
     await survey.save();
@@ -71,7 +56,7 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 // Update a survey
-router.patch("/:id", auth, upload.single("image"), async (req, res) => {
+router.patch("/:id", auth, uploadSurvey.single("image"), async (req, res) => {
   try {
     const { survey_title, description, survey_link } = req.body;
     const survey = await Survey.findById(req.params.id);
@@ -82,10 +67,7 @@ router.patch("/:id", auth, upload.single("image"), async (req, res) => {
     if (survey_title) survey.survey_title = survey_title;
     if (description) survey.description = description;
     if (survey_link) survey.survey_link = survey_link;
-    if (req.file)
-      survey.image = `${req.protocol}://${req.get("host")}/uploads/${
-        req.file.filename
-      }`;
+    if (req.file) survey.image = req.file.path;
 
     await survey.save();
     res.json({ message: "Survey updated successfully", data: survey });

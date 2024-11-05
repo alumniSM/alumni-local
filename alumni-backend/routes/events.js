@@ -4,40 +4,45 @@ import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import { uploadEvent } from "../cloudinary.js";
+import auth from "../middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadPath = path.join(__dirname, "..", "uploads");
-    fs.mkdirSync(uploadPath, { recursive: true });
-    cb(null, uploadPath);
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
-});
-
-const upload = multer({ storage: storage });
-
-// Create an event
-router.post("/", upload.single("image"), async (req, res) => {
+router.post("/", auth, uploadEvent.single("image"), async (req, res) => {
   try {
     const { event_title, description, dateTime, location } = req.body;
+
+    // Validate required fields
+    if (!event_title || !description || !dateTime || !location) {
+      return res.status(400).json({
+        message: "Please provide all required fields",
+      });
+    }
+
+    // Log the Cloudinary file upload result
+    console.log("File upload result:", req.file);
+
     const event = new Event({
       event_title,
       description,
       dateTime,
       location,
-      image: req.file ? `/uploads/${req.file.filename}` : null,
+      image: req.file ? req.file.path : null,
+      createdBy: req.user.id,
     });
+
     await event.save();
     res.status(201).json(event);
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Event creation error:", error);
+    res.status(500).json({
+      message: "Server error during event creation",
+      error: error.message,
+    });
   }
 });
 
@@ -65,7 +70,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // Update an event
-router.patch("/:id", upload.single("image"), async (req, res) => {
+router.patch("/:id", auth, uploadEvent.single("image"), async (req, res) => {
   try {
     const { event_title, description, dateTime, location } = req.body;
     const event = await Event.findById(req.params.id);
@@ -77,7 +82,7 @@ router.patch("/:id", upload.single("image"), async (req, res) => {
     if (description) event.description = description;
     if (dateTime) event.dateTime = dateTime;
     if (location) event.location = location;
-    if (req.file) event.image = req.file.filename;
+    if (req.file) event.image = req.file.path;
 
     await event.save();
     res.json(event);
